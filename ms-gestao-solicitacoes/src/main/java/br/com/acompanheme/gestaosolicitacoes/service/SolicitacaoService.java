@@ -1,0 +1,162 @@
+package br.com.acompanheme.gestaosolicitacoes.service;
+
+import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.AlterarPrioridadeRequest;
+import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.AvaliarSolicitacaoRequest;
+import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.CriarSolicitacaoRequest;
+import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.DefinirLocalRequest;
+import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.ResponderOfertaRequest;
+import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.SolicitacaoResponse;
+import br.com.acompanheme.gestaosolicitacoes.excecoes.BusinessException;
+import br.com.acompanheme.gestaosolicitacoes.excecoes.ErrorCode;
+import br.com.acompanheme.gestaosolicitacoes.excecoes.SolicitacaoNaoEncontradaException;
+import br.com.acompanheme.gestaosolicitacoes.mapper.SolicitacaoMapper;
+import br.com.acompanheme.gestaosolicitacoes.model.domain.Solicitacao;
+import br.com.acompanheme.gestaosolicitacoes.model.domain.UnidadeExecucao;
+import br.com.acompanheme.gestaosolicitacoes.model.enums.Status;
+import br.com.acompanheme.gestaosolicitacoes.model.enums.TipoEvento;
+import br.com.acompanheme.gestaosolicitacoes.repository.SolicitacaoRepository;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
+
+@Service
+public class SolicitacaoService {
+
+    private static final String AUTOR_PADRAO = "regulacao";
+
+    private final SolicitacaoRepository solicitacaoRepository;
+
+    private final ApplicationEventPublisher eventPublisher;
+
+    public SolicitacaoService(SolicitacaoRepository solicitacaoRepository,
+                              ApplicationEventPublisher eventPublisher) {
+        this.solicitacaoRepository = solicitacaoRepository;
+        this.eventPublisher = eventPublisher;
+    }
+
+    @Transactional
+    public UUID criar(Long consultaId, CriarSolicitacaoRequest request) {
+        if (request.consultaId() != null && !request.consultaId().equals(consultaId)) {
+            throw new BusinessException(ErrorCode.CONSULTA_ID_DIVERGENTE, HttpStatus.BAD_REQUEST);
+        }
+        Solicitacao solicitacao = SolicitacaoMapper.toEntity(request);
+        solicitacao.setConsultaId(consultaId);
+        solicitacao.setStatus(Status.REGISTRADA);
+        Solicitacao salva = solicitacaoRepository.saveAndFlush(solicitacao);
+        publicar(salva, TipoEvento.SOLICITACAO_REGISTRADA, null);
+        return salva.getId();
+    }
+
+    @Transactional(readOnly = true)
+    public SolicitacaoResponse buscarPorId(UUID id) {
+        return SolicitacaoMapper.toResponse(buscarEntidade(id));
+    }
+
+    @Transactional
+    public SolicitacaoResponse iniciarAnalise(UUID id) {
+        Solicitacao solicitacao = buscarEntidade(id);
+        solicitacao.iniciarAnalise();
+        return salvar(solicitacao, TipoEvento.SOLICITACAO_EM_ANALISE);
+    }
+
+    @Transactional
+    public SolicitacaoResponse avaliar(UUID id, AvaliarSolicitacaoRequest request) {
+        Solicitacao solicitacao = buscarEntidade(id);
+        TipoEvento tipoEvento = switch (request.decisao()) {
+            case APROVADA -> {
+                solicitacao.avaliarComoAprovada();
+                yield TipoEvento.SOLICITACAO_EM_FILA;
+            }
+            case NEGADA -> {
+                solicitacao.avaliarComoNegada(request.motivo());
+                yield TipoEvento.SOLICITACAO_REJEITADA;
+            }
+            case PENDENTE -> {
+                solicitacao.avaliarComoPendente(request.motivo());
+                yield TipoEvento.SOLICITACAO_DEVOLVIDA;
+            }
+        };
+        return salvar(solicitacao, tipoEvento, request.motivo());
+    }
+
+    @Transactional
+    public SolicitacaoResponse complementarDocumentacao(UUID id) {
+        Solicitacao solicitacao = buscarEntidade(id);
+        solicitacao.complementarDocumentacao();
+        return salvar(solicitacao, TipoEvento.SOLICITACAO_EM_ANALISE);
+    }
+
+    @Transactional
+    public SolicitacaoResponse alterarPrioridade(UUID id, AlterarPrioridadeRequest request) {
+        Solicitacao solicitacao = buscarEntidade(id);
+        solicitacao.alterarPrioridade(request.novaPrioridade(), AUTOR_PADRAO, request.justificativa());
+        return salvar(solicitacao, TipoEvento.SOLICITACAO_PRIORIDADE_ALTERADA, request.justificativa());
+    }
+
+    @Transactional
+    public SolicitacaoResponse definirLocal(UUID id, DefinirLocalRequest request) {
+        Solicitacao solicitacao = buscarEntidade(id);
+        UnidadeExecucao unidadeExecucao = UnidadeExecucao.builder()
+                .codigo(request.codigo())
+                .nome(request.nome())
+                .municipio(request.municipio())
+                .bairro(request.bairro())
+                .endereco(request.endereco())
+                .ddd(request.ddd())
+                .telefone(request.telefone())
+                .build();
+        solicitacao.definirLocal(unidadeExecucao);
+        return salvar(solicitacao, TipoEvento.SOLICITACAO_LOCAL_DEFINIDO);
+    }
+
+    @Transactional
+    public SolicitacaoResponse responderOferta(UUID id, ResponderOfertaRequest request) {
+        Solicitacao solicitacao = buscarEntidade(id);
+        TipoEvento tipoEvento;
+        if (request.aceita()) {
+            solicitacao.confirmarPeloPaciente();
+            tipoEvento = TipoEvento.SOLICITACAO_CONFIRMADA;
+        } else {
+            solicitacao.recusarOferta();
+            tipoEvento = TipoEvento.SOLICITACAO_EM_FILA;
+        }
+        return salvar(solicitacao, tipoEvento);
+    }
+
+    @Transactional
+    public SolicitacaoResponse cancelar(UUID id) {
+        Solicitacao solicitacao = buscarEntidade(id);
+        solicitacao.cancelar();
+        return salvar(solicitacao, TipoEvento.SOLICITACAO_CANCELADA);
+    }
+
+    @Transactional
+    public SolicitacaoResponse registrarRealizacao(UUID id) {
+        Solicitacao solicitacao = buscarEntidade(id);
+        solicitacao.registrarRealizacao();
+        return salvar(solicitacao, TipoEvento.SOLICITACAO_CONCLUIDA);
+    }
+
+    private Solicitacao buscarEntidade(UUID id) {
+        return solicitacaoRepository.findById(id)
+                .orElseThrow(SolicitacaoNaoEncontradaException::new);
+    }
+
+    private SolicitacaoResponse salvar(Solicitacao solicitacao, TipoEvento tipoEvento) {
+        return salvar(solicitacao, tipoEvento, null);
+    }
+
+    private SolicitacaoResponse salvar(Solicitacao solicitacao, TipoEvento tipoEvento, String motivo) {
+        Solicitacao salva = solicitacaoRepository.saveAndFlush(solicitacao);
+        publicar(salva, tipoEvento, motivo);
+        return SolicitacaoMapper.toResponse(salva);
+    }
+
+
+    private void publicar(Solicitacao solicitacao, TipoEvento tipoEvento, String motivo) {
+        eventPublisher.publishEvent(SolicitacaoMapper.toEvento(solicitacao, tipoEvento, motivo));
+    }
+}
