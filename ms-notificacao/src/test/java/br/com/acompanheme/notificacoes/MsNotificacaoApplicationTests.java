@@ -1,4 +1,4 @@
-package br.com.acompanheme.notificacao;
+package br.com.acompanheme.notificacoes;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
