@@ -17,13 +17,14 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
-  #kafka:
-  #  bootstrap-servers: localhost:9092
-  #  producer:
-  #    key-serializer: org.apache.kafka.common.serialization.StringSerializer
-  #    value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  kafka:
+   bootstrap-servers: localhost:9092
+   producer:
+     key-serializer: org.apache.kafka.common.serialization.StringSerializer
+     value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
-#api:
+
+# api:
 #  security:
 #    token:
 #      secret: agende-me-secret-key-2026
