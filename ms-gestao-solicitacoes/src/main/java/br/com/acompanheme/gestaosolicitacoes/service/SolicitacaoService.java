@@ -4,22 +4,27 @@ import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.AlterarPrioridadeRe
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.AvaliarSolicitacaoRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.CriarSolicitacaoRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.DefinirLocalRequest;
+import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.PosicaoFilaResponse;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.ResponderOfertaRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.SolicitacaoResponse;
 import br.com.acompanheme.gestaosolicitacoes.excecoes.BusinessException;
 import br.com.acompanheme.gestaosolicitacoes.excecoes.ErrorCode;
 import br.com.acompanheme.gestaosolicitacoes.excecoes.SolicitacaoNaoEncontradaException;
+import br.com.acompanheme.gestaosolicitacoes.excecoes.SolicitacaoSemPosicaoException;
 import br.com.acompanheme.gestaosolicitacoes.mapper.SolicitacaoMapper;
 import br.com.acompanheme.gestaosolicitacoes.model.domain.Solicitacao;
 import br.com.acompanheme.gestaosolicitacoes.model.domain.UnidadeExecucao;
+import br.com.acompanheme.gestaosolicitacoes.model.enums.Modalidade;
 import br.com.acompanheme.gestaosolicitacoes.model.enums.Status;
 import br.com.acompanheme.gestaosolicitacoes.model.enums.TipoEvento;
+import br.com.acompanheme.gestaosolicitacoes.model.enums.TipoSolicitacao;
 import br.com.acompanheme.gestaosolicitacoes.repository.SolicitacaoRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -53,6 +58,36 @@ public class SolicitacaoService {
     @Transactional(readOnly = true)
     public SolicitacaoResponse buscarPorId(UUID id) {
         return SolicitacaoMapper.toResponse(buscarEntidade(id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<SolicitacaoResponse> listarFilaDeTrabalho(TipoSolicitacao tipo, Modalidade modalidade) {
+        return solicitacaoRepository.buscarFilaDeTrabalho(tipo, modalidade).stream()
+                .map(SolicitacaoMapper::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SolicitacaoResponse> listarFilaDeEspera(TipoSolicitacao tipo, Modalidade modalidade) {
+        return solicitacaoRepository.buscarFilaDeEsperaPorTipoEModalidade(tipo, modalidade).stream()
+                .map(SolicitacaoMapper::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PosicaoFilaResponse consultarPosicao(UUID id) {
+        Solicitacao solicitacao = buscarEntidade(id);
+        if (solicitacao.getStatus() != Status.EM_FILA) {
+            throw new SolicitacaoSemPosicaoException(solicitacao.getStatus());
+        }
+        long naFrente = solicitacaoRepository.contarNaFrente(
+                solicitacao.getTipoSolicitacao(),
+                solicitacao.getModalidade(),
+                solicitacao.getPrioridade().rank(),
+                solicitacao.getDataEntradaFila());
+        long tamanhoTotalFila = solicitacaoRepository.buscarFilaDeEsperaPorTipoEModalidade(
+                solicitacao.getTipoSolicitacao(), solicitacao.getModalidade()).size();
+        return new PosicaoFilaResponse(solicitacao.getId(), naFrente + 1, tamanhoTotalFila);
     }
 
     @Transactional

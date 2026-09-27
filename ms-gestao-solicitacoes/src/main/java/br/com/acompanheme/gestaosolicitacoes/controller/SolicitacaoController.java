@@ -5,11 +5,16 @@ import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.AlterarPrioridadeRe
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.AvaliarSolicitacaoRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.CriarSolicitacaoRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.DefinirLocalRequest;
+import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.PosicaoFilaResponse;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.ResponderOfertaRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.SolicitacaoCriadaResponse;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.SolicitacaoResponse;
+import br.com.acompanheme.gestaosolicitacoes.model.enums.Modalidade;
+import br.com.acompanheme.gestaosolicitacoes.model.enums.TipoSolicitacao;
 import br.com.acompanheme.gestaosolicitacoes.service.SolicitacaoService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -24,9 +29,11 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -66,6 +73,54 @@ public class SolicitacaoController {
     @GetMapping("/solicitacoes/{id}")
     public ResponseEntity<SolicitacaoResponse> buscarPorId(@PathVariable UUID id) {
         return ResponseEntity.ok(solicitacaoService.buscarPorId(id));
+    }
+
+    @Operation(summary = "Listar fila de trabalho", description = "Lista as solicitações REGISTRADA aguardando análise da regulação, do tipo e modalidade informados, ordenadas por prioridade (URGENTE primeiro) e data da solicitação.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "OK",
+                    content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = SolicitacaoResponse.class)))),
+            @ApiResponse(responseCode = "400", description = "Parâmetro tipo ausente ou valor de enum inválido",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class))),
+            @ApiResponse(responseCode = "500", description = "Internal Server Error",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+    })
+    @GetMapping("/solicitacoes/fila-trabalho")
+    public ResponseEntity<List<SolicitacaoResponse>> listarFilaDeTrabalho(
+            @Parameter(description = "Tipo da solicitação", required = true) @RequestParam TipoSolicitacao tipo,
+            @Parameter(description = "Modalidade da solicitação (opcional)") @RequestParam(required = false) Modalidade modalidade) {
+        return ResponseEntity.ok(solicitacaoService.listarFilaDeTrabalho(tipo, modalidade));
+    }
+
+    @Operation(summary = "Listar fila de espera", description = "Lista as solicitações EM_FILA do tipo e modalidade informados, na ordem em que serão atendidas: prioridade (URGENTE primeiro) e data de entrada na fila.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "OK",
+                    content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = SolicitacaoResponse.class)))),
+            @ApiResponse(responseCode = "400", description = "Parâmetro tipo ausente ou valor de enum inválido",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class))),
+            @ApiResponse(responseCode = "500", description = "Internal Server Error",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+    })
+    @GetMapping("/solicitacoes/fila-espera")
+    public ResponseEntity<List<SolicitacaoResponse>> listarFilaDeEspera(
+            @Parameter(description = "Tipo da solicitação", required = true) @RequestParam TipoSolicitacao tipo,
+            @Parameter(description = "Modalidade da solicitação (opcional)") @RequestParam(required = false) Modalidade modalidade) {
+        return ResponseEntity.ok(solicitacaoService.listarFilaDeEspera(tipo, modalidade));
+    }
+
+    @Operation(summary = "Consultar posição na fila", description = "Retorna a posição da solicitação na fila de espera do seu tipo e modalidade, e o tamanho total dessa fila. Válido apenas para solicitações EM_FILA.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "OK",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = PosicaoFilaResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Solicitação não encontrada",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErroResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Solicitação não está em fila de espera no momento",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErroResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Internal Server Error",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+    })
+    @GetMapping("/solicitacoes/{id}/posicao")
+    public ResponseEntity<PosicaoFilaResponse> consultarPosicao(@PathVariable UUID id) {
+        return ResponseEntity.ok(solicitacaoService.consultarPosicao(id));
     }
 
     @Operation(summary = "Iniciar análise", description = "Um analista da regulação assume a solicitação para começar a avaliar. Válido a partir de REGISTRADA.")

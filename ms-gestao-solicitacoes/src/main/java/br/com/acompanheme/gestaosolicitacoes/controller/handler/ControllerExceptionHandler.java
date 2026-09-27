@@ -3,6 +3,7 @@ package br.com.acompanheme.gestaosolicitacoes.controller.handler;
 import br.com.acompanheme.gestaosolicitacoes.dto.ErroResponse;
 import br.com.acompanheme.gestaosolicitacoes.excecoes.BusinessException;
 import br.com.acompanheme.gestaosolicitacoes.excecoes.SolicitacaoNaoEncontradaException;
+import br.com.acompanheme.gestaosolicitacoes.excecoes.SolicitacaoSemPosicaoException;
 import br.com.acompanheme.gestaosolicitacoes.excecoes.TransicaoInvalidaException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -37,6 +38,11 @@ public class ControllerExceptionHandler {
 
     @ExceptionHandler(TransicaoInvalidaException.class)
     public ResponseEntity<ErroResponse> handlerTransicaoInvalida(TransicaoInvalidaException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErroResponse(e.getMessage(), LocalDateTime.now()));
+    }
+
+    @ExceptionHandler(SolicitacaoSemPosicaoException.class)
+    public ResponseEntity<ErroResponse> handlerSolicitacaoSemPosicao(SolicitacaoSemPosicaoException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErroResponse(e.getMessage(), LocalDateTime.now()));
     }
 
