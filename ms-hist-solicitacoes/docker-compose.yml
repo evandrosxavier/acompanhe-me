@@ -12,7 +12,7 @@ services:
     volumes:
       - pgdata-historico:/var/lib/postgresql/data
 
-  # O Kafka e o Zookeeper são compartilhados: sobem pelo docker-compose do ms-gestao-consultas.
+  # O Kafka e o Zookeeper são compartilhados: sobem pelo docker-compose.yml da raiz do monorepo.
 
 volumes:
   pgdata-historico:
