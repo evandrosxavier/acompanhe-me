@@ -10,8 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -30,9 +29,16 @@ public class NotificacaoEmailService {
     public void notificar(SolicitacaoNotificacaoDTO dto) {
         String fraseEvento = switch (dto.tipoEvento()) {
             case "SOLICITACAO_REGISTRADA" -> "Recebemos sua solicitação e ela já está registrada em nosso sistema.";
+            case "SOLICITACAO_EM_ANALISE" -> "Sua solicitação está em análise pela equipe de regulação.";
             case "SOLICITACAO_DEVOLVIDA"  -> "Sua solicitação foi devolvida e precisa de ajustes da sua parte.";
-            case "SOLICITACAO_CONFIRMADA" -> "Sua solicitação foi confirmada.";
-            case "SOLICITACAO_REJEITADA"  -> "Infelizmente, sua solicitação foi rejeitada.";
+            case "SOLICITACAO_NEGADA"     -> "Infelizmente, sua solicitação foi negada.";
+            case "SOLICITACAO_APROVADA"   -> "Sua solicitação foi aprovada e entrou na fila de espera.";
+            case "SOLICITACAO_PRIORIDADE_ALTERADA" -> "A prioridade da sua solicitação foi alterada de %s para %s."
+                    .formatted(formatarPrioridade(dto.prioridadeAnterior()), formatarPrioridade(dto.prioridadeNova()));
+            case "SOLICITACAO_LOCAL_DEFINIDO" -> dto.unidadeExecucaoNome() == null
+                    ? "Foi definido um local para o seu atendimento."
+                    : "Foi definido um local para o seu atendimento: %s - %s."
+                            .formatted(dto.unidadeExecucaoNome(), dto.unidadeExecucaoMunicipio());
             case "SOLICITACAO_CANCELADA"  -> "Sua solicitação foi cancelada.";
             case "SOLICITACAO_CONCLUIDA"  -> "Sua solicitação foi concluída.";
             default -> null;
@@ -47,10 +53,25 @@ public class NotificacaoEmailService {
     }
 
 
+    private String formatarPrioridade(String prioridade) {
+        if (prioridade == null) return "não informada";
+        return switch (prioridade) {
+            case "URGENTE" -> "Urgente";
+            case "ALTA"    -> "Alta";
+            case "MEDIA"   -> "Média";
+            case "BAIXA"   -> "Baixa";
+            default -> prioridade;
+        };
+    }
+
+    // O motivo pode conter texto interno da regulação (ex.: justificativa de prioridade),
+    // então só vai ao paciente nos eventos em que ele precisa saber o porquê.
+    private static final Set<String> EVENTOS_COM_MOTIVO = Set.of("SOLICITACAO_DEVOLVIDA", "SOLICITACAO_NEGADA");
+
     private String montarCorpo(SolicitacaoNotificacaoDTO dto, String fraseEvento) {
-        String linhaMotivo = (dto.motivo() == null || dto.motivo().isBlank())
-                ? ""
-                : "\nMotivo: " + dto.motivo() + "\n";
+        boolean exibirMotivo = EVENTOS_COM_MOTIVO.contains(dto.tipoEvento())
+                && dto.motivo() != null && !dto.motivo().isBlank();
+        String linhaMotivo = exibirMotivo ? "\nMotivo: " + dto.motivo() + "\n" : "";
 
         return String.format("""
                 Olá %s,
@@ -62,7 +83,7 @@ public class NotificacaoEmailService {
                 Em caso de dúvidas, entre em contato conosco.
 
                 Atenciosamente,
-                Equipe Agende-me
+                Equipe Regulação Saúde
                 """,
                 dto.nomePaciente(),
                 fraseEvento,
