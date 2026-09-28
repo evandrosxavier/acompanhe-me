@@ -1,0 +1,26 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: ms-hist-solicitacoes
+  datasource:
+    url: jdbc:postgresql://localhost:5435/historico_solicitacoes_db
+    username: admin
+    password: admin
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      # Grupo próprio: o ms-notificacao usa outro grupo, então os dois recebem todas as mensagens.
+      # A desserialização é configurada em KafkaConsumerConfig.
+      group-id: hist-solicitacoes
+  graphql:
+    path: /graphql
+    graphiql:
+      enabled: true
+      path: /graphiql

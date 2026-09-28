@@ -1,0 +1,18 @@
+services:
+
+  db-historico:
+    image: postgres:16
+    container_name: acompanheme-historico-db
+    ports:
+      - "5435:5432"
+    environment:
+      - POSTGRES_DB=historico_solicitacoes_db
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+    volumes:
+      - pgdata-historico:/var/lib/postgresql/data
+
+  # O Kafka e o Zookeeper são compartilhados: sobem pelo docker-compose do ms-gestao-consultas.
+
+volumes:
+  pgdata-historico:

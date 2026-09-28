@@ -1,0 +1,71 @@
+"""
+Registro de auditoria de um evento do ciclo de vida de uma solicitação.
+Cada evento publicado pelo ms-gestao-solicitacoes gera um registro novo; registros nunca são alterados.
+"""
+type HistoricoSolicitacao {
+    "Identificador único do registro no histórico."
+    id: ID!
+
+    "Identificador da solicitação no ms-gestao-solicitacoes."
+    solicitacaoId: ID!
+
+    "Tipo do evento. Ex.: SOLICITACAO_REGISTRADA, SOLICITACAO_APROVADA, SOLICITACAO_PRIORIDADE_ALTERADA."
+    tipoEvento: String!
+
+    "Status da solicitação após o evento. Ex.: REGISTRADA, EM_FILA, CONCLUIDA."
+    statusAtual: String!
+
+    "Prioridade antes da alteração (somente em SOLICITACAO_PRIORIDADE_ALTERADA)."
+    prioridadeAnterior: String
+
+    "Prioridade após a alteração (somente em SOLICITACAO_PRIORIDADE_ALTERADA)."
+    prioridadeNova: String
+
+    "Quem executou a ação que gerou o evento."
+    autor: String
+
+    "Motivo da devolução/negação ou justificativa da alteração de prioridade."
+    motivo: String
+
+    "Nome da unidade de execução, quando houver local definido."
+    unidadeExecucaoNome: String
+
+    "Município da unidade de execução, quando houver local definido."
+    unidadeExecucaoMunicipio: String
+
+    "CPF do paciente (somente dígitos)."
+    pacienteCpf: String
+
+    "Nome do paciente no momento do evento."
+    pacienteNome: String
+
+    "Momento em que o evento ocorreu no ms-gestao-solicitacoes (yyyy-MM-dd'T'HH:mm:ss)."
+    dataEvento: String!
+
+    "Momento em que o registro foi gravado neste serviço (yyyy-MM-dd'T'HH:mm:ss)."
+    dataRegistro: String!
+}
+
+type Query {
+
+    """
+    Linha do tempo completa de uma solicitação, do evento mais antigo para o mais recente.
+    """
+    historicoDaSolicitacao(
+        "ID (UUID) da solicitação. Obrigatório."
+        solicitacaoId: ID!
+    ): [HistoricoSolicitacao!]!
+
+    """
+    Eventos de todas as solicitações de um paciente, paginados, do mais recente para o mais antigo.
+    O CPF pode ser enviado com ou sem máscara (ex.: 123.456.789-01 ou 12345678901).
+    """
+    historicoDoPaciente(
+        "CPF do paciente, com ou sem máscara. Obrigatório."
+        cpf: String!
+        "Número da página (base 0). Padrão: 0."
+        page: Int
+        "Quantidade de registros por página (1 a 100). Padrão: 10."
+        size: Int
+    ): [HistoricoSolicitacao!]!
+}
