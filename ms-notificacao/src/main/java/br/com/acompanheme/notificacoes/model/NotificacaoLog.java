@@ -25,10 +25,12 @@ public class NotificacaoLog {
     @Column(nullable = false)
     private String tipoEvento;
 
-    @Column(nullable = false)
+    // Opcionais de propósito: se o evento chegar sem esses dados,
+    // a falha ainda precisa conseguir ser registrada.
+    @Column
     private String destinatario;
 
-    @Column(nullable = false)
+    @Column
     private String pacienteNome;
 
     @Column(nullable = false)

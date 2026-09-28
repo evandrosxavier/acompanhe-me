@@ -43,9 +43,17 @@ public class NotificacaoEmailService {
             case "SOLICITACAO_CONCLUIDA"  -> "Sua solicitação foi concluída.";
             default -> null;
         };
-              if (fraseEvento == null) {
+        if (fraseEvento == null) {
             log.info("Evento {} não gera e-mail para o paciente | Solicitacao ID: {}",
                     dto.tipoEvento(), dto.solicitacaoId());
+            return;
+        }
+
+        if (dto.emailPaciente() == null || dto.emailPaciente().isBlank()) {
+            String mensagemErro = "E-mail do paciente ausente no evento";
+            log.error("{} | Tipo: {} | Solicitacao ID: {}", mensagemErro, dto.tipoEvento(), dto.solicitacaoId());
+            logService.registrarFalha(dto.solicitacaoId(), dto.tipoEvento(), dto.statusAtual(),
+                    null, dto.nomePaciente(), ASSUNTO, mensagemErro);
             return;
         }
 
