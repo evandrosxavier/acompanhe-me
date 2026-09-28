@@ -20,6 +20,7 @@ public record SolicitacaoEvento(
     String autor,
     String unidadeExecucaoNome,
     String unidadeExecucaoMunicipio,
+    String cpfPaciente,
     String nomePaciente,
     String emailPaciente,
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")

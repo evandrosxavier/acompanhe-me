@@ -83,6 +83,7 @@ public class SolicitacaoMapper {
                 autor,
                 unidade != null ? unidade.getNome() : null,
                 unidade != null ? unidade.getMunicipio() : null,
+                paciente != null ? paciente.getCpf() : null,
                 paciente != null ? paciente.getNome() : null,
                 paciente != null ? paciente.getEmail() : null,
                 LocalDateTime.now()
