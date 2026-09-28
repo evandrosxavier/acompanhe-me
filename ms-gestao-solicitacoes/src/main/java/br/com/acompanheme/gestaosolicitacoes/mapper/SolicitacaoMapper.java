@@ -4,6 +4,7 @@ import br.com.acompanheme.gestaosolicitacoes.dto.notificacao.SolicitacaoEvento;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.CriarSolicitacaoRequest;
 import br.com.acompanheme.gestaosolicitacoes.model.domain.Paciente;
 import br.com.acompanheme.gestaosolicitacoes.model.domain.Solicitacao;
+import br.com.acompanheme.gestaosolicitacoes.model.enums.Prioridade;
 import br.com.acompanheme.gestaosolicitacoes.model.enums.TipoEvento;
 
 import java.time.LocalDateTime;
@@ -61,20 +62,27 @@ public class SolicitacaoMapper {
                 s.getDataAtendimento());
     }
 
-    public static SolicitacaoEvento toEvento(Solicitacao s, TipoEvento tipoEvento) {
-        return toEvento(s, tipoEvento, null);
-    }
-
-    public static SolicitacaoEvento toEvento(Solicitacao s, TipoEvento tipoEvento, String motivo) {
+    /**
+     * @param prioridadeAnterior preenchido apenas em alterações de prioridade; nesse caso a
+     *                           prioridade atual da solicitação vai como prioridadeNova.
+     */
+    public static SolicitacaoEvento toEvento(Solicitacao s, TipoEvento tipoEvento, String motivo,
+                                             String autor, Prioridade prioridadeAnterior) {
         if (s == null) {
             return null;
         }
         Paciente paciente = s.getPaciente();
+        UnidadeExecucao unidade = s.getUnidadeExecucao();
         return new SolicitacaoEvento(
                 s.getId(),
                 tipoEvento,
                 s.getStatus(),
                 motivo,
+                prioridadeAnterior,
+                prioridadeAnterior != null ? s.getPrioridade() : null,
+                autor,
+                unidade != null ? unidade.getNome() : null,
+                unidade != null ? unidade.getMunicipio() : null,
                 paciente != null ? paciente.getNome() : null,
                 paciente != null ? paciente.getEmail() : null,
                 LocalDateTime.now()

@@ -15,6 +15,7 @@ import br.com.acompanheme.gestaosolicitacoes.mapper.SolicitacaoMapper;
 import br.com.acompanheme.gestaosolicitacoes.model.domain.Solicitacao;
 import br.com.acompanheme.gestaosolicitacoes.model.domain.UnidadeExecucao;
 import br.com.acompanheme.gestaosolicitacoes.model.enums.Modalidade;
+import br.com.acompanheme.gestaosolicitacoes.model.enums.Prioridade;
 import br.com.acompanheme.gestaosolicitacoes.model.enums.Status;
 import br.com.acompanheme.gestaosolicitacoes.model.enums.TipoEvento;
 import br.com.acompanheme.gestaosolicitacoes.model.enums.TipoSolicitacao;
@@ -51,7 +52,7 @@ public class SolicitacaoService {
         solicitacao.setConsultaId(consultaId);
         solicitacao.setStatus(Status.REGISTRADA);
         Solicitacao salva = solicitacaoRepository.saveAndFlush(solicitacao);
-        publicar(salva, TipoEvento.SOLICITACAO_REGISTRADA, null);
+        publicar(salva, TipoEvento.SOLICITACAO_REGISTRADA, null, null);
         return salva.getId();
     }
 
@@ -103,11 +104,11 @@ public class SolicitacaoService {
         TipoEvento tipoEvento = switch (request.decisao()) {
             case APROVADA -> {
                 solicitacao.avaliarComoAprovada();
-                yield TipoEvento.SOLICITACAO_EM_FILA;
+                yield TipoEvento.SOLICITACAO_APROVADA;
             }
             case NEGADA -> {
                 solicitacao.avaliarComoNegada(request.motivo());
-                yield TipoEvento.SOLICITACAO_REJEITADA;
+                yield TipoEvento.SOLICITACAO_NEGADA;
             }
             case PENDENTE -> {
                 solicitacao.avaliarComoPendente(request.motivo());
@@ -127,8 +128,9 @@ public class SolicitacaoService {
     @Transactional
     public SolicitacaoResponse alterarPrioridade(UUID id, AlterarPrioridadeRequest request) {
         Solicitacao solicitacao = buscarEntidade(id);
+        Prioridade prioridadeAnterior = solicitacao.getPrioridade();
         solicitacao.alterarPrioridade(request.novaPrioridade(), AUTOR_PADRAO, request.justificativa());
-        return salvar(solicitacao, TipoEvento.SOLICITACAO_PRIORIDADE_ALTERADA, request.justificativa());
+        return salvar(solicitacao, TipoEvento.SOLICITACAO_PRIORIDADE_ALTERADA, request.justificativa(), prioridadeAnterior);
     }
 
     @Transactional
@@ -153,10 +155,10 @@ public class SolicitacaoService {
         TipoEvento tipoEvento;
         if (request.aceita()) {
             solicitacao.confirmarPeloPaciente();
-            tipoEvento = TipoEvento.SOLICITACAO_CONFIRMADA;
+            tipoEvento = TipoEvento.SOLICITACAO_OFERTA_ACEITA;
         } else {
             solicitacao.recusarOferta();
-            tipoEvento = TipoEvento.SOLICITACAO_EM_FILA;
+            tipoEvento = TipoEvento.SOLICITACAO_OFERTA_RECUSADA;
         }
         return salvar(solicitacao, tipoEvento);
     }
@@ -181,17 +183,22 @@ public class SolicitacaoService {
     }
 
     private SolicitacaoResponse salvar(Solicitacao solicitacao, TipoEvento tipoEvento) {
-        return salvar(solicitacao, tipoEvento, null);
+        return salvar(solicitacao, tipoEvento, null, null);
     }
 
     private SolicitacaoResponse salvar(Solicitacao solicitacao, TipoEvento tipoEvento, String motivo) {
+        return salvar(solicitacao, tipoEvento, motivo, null);
+    }
+
+    private SolicitacaoResponse salvar(Solicitacao solicitacao, TipoEvento tipoEvento, String motivo,
+                                       Prioridade prioridadeAnterior) {
         Solicitacao salva = solicitacaoRepository.saveAndFlush(solicitacao);
-        publicar(salva, tipoEvento, motivo);
+        publicar(salva, tipoEvento, motivo, prioridadeAnterior);
         return SolicitacaoMapper.toResponse(salva);
     }
 
-
-    private void publicar(Solicitacao solicitacao, TipoEvento tipoEvento, String motivo) {
-        eventPublisher.publishEvent(SolicitacaoMapper.toEvento(solicitacao, tipoEvento, motivo));
+    private void publicar(Solicitacao solicitacao, TipoEvento tipoEvento, String motivo, Prioridade prioridadeAnterior) {
+        eventPublisher.publishEvent(
+                SolicitacaoMapper.toEvento(solicitacao, tipoEvento, motivo, AUTOR_PADRAO, prioridadeAnterior));
     }
 }

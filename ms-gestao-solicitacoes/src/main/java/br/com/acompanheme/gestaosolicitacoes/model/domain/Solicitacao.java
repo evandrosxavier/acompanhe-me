@@ -174,7 +174,6 @@ public class Solicitacao {
         if (justificativa == null || justificativa.isBlank()) {
             throw new IllegalArgumentException("Justificativa é obrigatória para alterar a prioridade.");
         }
-        // TODO: publicar evento de auditoria com o autor desta alteração quando o mecanismo de auditoria existir.
         prioridade = novaPrioridade;
         dataAtualizacao = LocalDateTime.now();
     }
@@ -200,6 +199,7 @@ public class Solicitacao {
         if (status != Status.LOCAL_DEFINIDO) {
             throw TransicaoInvalidaException.para(status, "recusarOferta");
         }
+        unidadeExecucao = null;
         status = Status.EM_FILA;
         dataAtualizacao = LocalDateTime.now();
     }
