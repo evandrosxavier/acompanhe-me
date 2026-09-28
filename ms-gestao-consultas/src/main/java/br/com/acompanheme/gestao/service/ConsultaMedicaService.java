@@ -35,7 +35,6 @@ public class ConsultaMedicaService {
     private final PacienteRepository pacienteRepository;
     private final ConsultaMedicaMapper consultaMedicaMapper;
     private final EntityManager entityManager;
-    private final KafkaProducerService kafkaProducerService;
 
     @Transactional
     public ConsultaAgendamentoResponse cadastrarConsulta(ConsultaRequest dto) {
@@ -60,11 +59,6 @@ public class ConsultaMedicaService {
         consulta.setEspecialidade(medico.getEspecialidade());
         consulta.setStatus(StatusConsulta.AGENDADA);
         ConsultaMedica consultaSalva = consultaRepository.save(consulta);
-
-        kafkaProducerService.enviarNotificacao(
-                "consulta-agendada",
-                consultaMedicaMapper.toNotificacaoDTO(consultaSalva)
-        );
 
         return consultaMedicaMapper.consultaAgendadaToResponseDTO(consultaSalva);
 
@@ -95,10 +89,6 @@ public class ConsultaMedicaService {
         consultaRepository.saveAndFlush(consulta);
         entityManager.refresh(consulta);
 
-        kafkaProducerService.enviarNotificacao(
-                "consulta-agendamento-atualizado",
-                consultaMedicaMapper.toNotificacaoDTO(consulta)
-        );
         return consultaMedicaMapper.consultaAgendadaToResponseDTO(consulta);
     }
 
@@ -117,11 +107,6 @@ public class ConsultaMedicaService {
 
         consultaRepository.saveAndFlush(consulta);
         entityManager.refresh(consulta);
-
-        kafkaProducerService.enviarNotificacao(
-                "consulta-atendimento-registrado",
-                consultaMedicaMapper.toNotificacaoDTO(consulta)
-        );
 
         return consultaMedicaMapper.consultaRealizadaToResponseDTO(consulta);
     }
@@ -143,10 +128,6 @@ public class ConsultaMedicaService {
         consultaRepository.saveAndFlush(consulta);
         entityManager.refresh(consulta);
 
-        kafkaProducerService.enviarNotificacao(
-                "consulta-atendimento-atualizado",
-                consultaMedicaMapper.toNotificacaoDTO(consulta)
-        );
         return consultaMedicaMapper.consultaRealizadaToResponseDTO(consulta);
     }
 
@@ -165,10 +146,6 @@ public class ConsultaMedicaService {
         consulta.setStatus(StatusConsulta.CANCELADA);
         consultaRepository.saveAndFlush(consulta);
         entityManager.refresh(consulta);
-        kafkaProducerService.enviarNotificacao(
-                "consulta-cancelada",
-                consultaMedicaMapper.toNotificacaoDTO(consulta)
-        );
 
         return consultaMedicaMapper.consultaAgendadaToResponseDTO(consulta);
     }

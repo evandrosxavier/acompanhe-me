@@ -1,7 +1,6 @@
 package br.com.acompanheme.gestao.mapper;
 
 import br.com.acompanheme.gestao.dto.consulta.*;
-import br.com.acompanheme.gestao.dto.notificacao.ConsultaNotificacaoDTO;
 import br.com.acompanheme.gestao.model.domain.ConsultaMedica;
 import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
@@ -40,15 +39,6 @@ public interface ConsultaMedicaMapper {
     @Mapping(source = "medico.crmUf",  target = "medicoCrmUf")
     ConsultaAtendimentoResponse consultaRealizadaToResponseDTO(ConsultaMedica consulta);
 
-
-    @Mapping(source = "paciente.nome", target = "pacienteNome")
-    @Mapping(source = "paciente.cpf", target = "pacienteCpf")
-    @Mapping(source = "paciente.email", target = "pacienteEmail")
-    @Mapping(source = "medico.nome", target = "medicoNome")
-    @Mapping(source = "medico.crm", target = "medicoCrm")
-    @Mapping(target = "consultaId", source = "id")
-    @Mapping(target = "dataEvento", expression = "java(java.time.LocalDateTime.now().toString())")
-    ConsultaNotificacaoDTO toNotificacaoDTO(ConsultaMedica consulta);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
