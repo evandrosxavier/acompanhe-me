@@ -1,0 +1,1047 @@
+{
+  "info": {
+    "name": "Acompanhe-me",
+    "description": "Requisições do ms-gestao-solicitacoes (REST) e do ms-hist-solicitacoes (GraphQL).\n\nAntes de usar:\n1. Suba a infraestrutura (docker compose na raiz para o Kafka e o docker-compose de cada serviço para os bancos e o Mailpit) e depois os serviços ms-notificacao, ms-hist-solicitacoes e ms-gestao-solicitacoes.\n2. Execute a pasta \"1. Fluxo principal\" na ordem.\n\nVariáveis da collection: baseUrlSolicitacoes, baseUrlHistorico, consultaId, cpfPaciente e solicitacaoId (preenchida automaticamente ao criar uma solicitação).\n\nE-mails gerados pelos eventos: http://localhost:8025 (Mailpit).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "ms-gestao-solicitacoes",
+      "description": "API REST de solicitações (porta 8082). Swagger: http://localhost:8082/swagger-ui.html",
+      "item": [
+        {
+          "name": "1. Fluxo principal (cirurgia do início ao fim)",
+          "description": "Execute na ordem. A primeira requisição guarda o id da solicitação na variável {{solicitacaoId}}, usada por todas as seguintes. Cada passo gera um evento no Kafka: acompanhe os e-mails no Mailpit (http://localhost:8025) e a linha do tempo na pasta do ms-hist-solicitacoes.",
+          "item": [
+            {
+              "name": "1.1 Criar solicitação de cirurgia",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/consultas/{{consultaId}}/solicitacoes",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "consultas",
+                    "{{consultaId}}",
+                    "solicitacoes"
+                  ]
+                },
+                "description": "Cria a solicitação com status REGISTRADA e guarda o id em {{solicitacaoId}}.\n\nRegras: modalidade obrigatória para CIRURGIA; motivoDaUrgencia obrigatório quando a prioridade é URGENTE.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"paciente\": {\n    \"nome\": \"Maria Clara Santos\",\n    \"cpf\": \"{{cpfPaciente}}\",\n    \"cns\": \"898000000000000\",\n    \"dataNascimento\": \"1985-03-12\",\n    \"telefone\": \"19987654321\",\n    \"email\": \"maria.santos@exemplo.com\",\n    \"endereco\": {\n      \"municipio\": \"Campinas\",\n      \"bairro\": \"Cambuí\"\n    }\n  },\n  \"medico\": {\n    \"nome\": \"Dr. João Pereira\",\n    \"crm\": \"123456-SP\",\n    \"especialidade\": \"Cardiologia\"\n  },\n  \"unidadeSolicitante\": {\n    \"codigo\": \"2079798\",\n    \"nome\": \"UBS Central\",\n    \"municipio\": \"Campinas\",\n    \"bairro\": \"Cambuí\"\n  },\n  \"tipoSolicitacao\": \"CIRURGIA\",\n  \"procedimentos\": [\n    {\n      \"codigoProcedimento\": \"0406010935\",\n      \"descricaoProcedimento\": \"Troca valvar aórtica\"\n    }\n  ],\n  \"modalidade\": \"INTERNACAO\",\n  \"prioridade\": \"ALTA\",\n  \"diagnostico\": \"Estenose aórtica grave\",\n  \"observacoes\": \"Paciente com exames pré-operatórios em dia.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) { pm.collectionVariables.set(\"solicitacaoId\", pm.response.json().id); console.log(\"solicitacaoId =\", pm.response.json().id); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "1.2 Buscar solicitação por id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}"
+                  ]
+                },
+                "description": "Retorna todos os dados da solicitação."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "1.3 Fila de trabalho da regulação",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/fila-trabalho?tipo=CIRURGIA&modalidade=INTERNACAO",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "fila-trabalho"
+                  ],
+                  "query": [
+                    {
+                      "key": "tipo",
+                      "value": "CIRURGIA",
+                      "description": "CONSULTA, EXAME ou CIRURGIA"
+                    },
+                    {
+                      "key": "modalidade",
+                      "value": "INTERNACAO",
+                      "description": "Opcional"
+                    }
+                  ]
+                },
+                "description": "Solicitações REGISTRADA aguardando análise, ordenadas por prioridade e data. A modalidade é opcional: sem ela, lista todas as modalidades."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "1.4 Iniciar análise",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/analise",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "analise"
+                  ]
+                },
+                "description": "REGISTRADA → EM_ANALISE."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "1.5 Aprovar",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/avaliacao",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "avaliacao"
+                  ]
+                },
+                "description": "EM_ANALISE → EM_FILA. A solicitação entra na fila de espera.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"decisao\": \"APROVADA\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "1.6 Fila de espera",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/fila-espera?tipo=CIRURGIA&modalidade=INTERNACAO",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "fila-espera"
+                  ],
+                  "query": [
+                    {
+                      "key": "tipo",
+                      "value": "CIRURGIA",
+                      "description": "CONSULTA, EXAME ou CIRURGIA"
+                    },
+                    {
+                      "key": "modalidade",
+                      "value": "INTERNACAO",
+                      "description": "Obrigatória para CIRURGIA; não permitida para CONSULTA/EXAME"
+                    }
+                  ]
+                },
+                "description": "Solicitações EM_FILA na ordem de atendimento. Para CIRURGIA a modalidade é obrigatória: cada modalidade é uma fila própria."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "1.7 Posição na fila",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/posicao",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "posicao"
+                  ]
+                },
+                "description": "Posição da solicitação na fila do seu tipo e modalidade, e o tamanho total dessa fila. Calculada no momento da consulta."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "1.8 Alterar prioridade",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/prioridade",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "prioridade"
+                  ]
+                },
+                "description": "Somente EM_FILA. A justificativa é obrigatória.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"novaPrioridade\": \"URGENTE\",\n  \"justificativa\": \"Piora do quadro clínico relatada pela UBS.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "1.9 Definir local (oferta)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/oferta",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "oferta"
+                  ]
+                },
+                "description": "EM_FILA → LOCAL_DEFINIDO. Oferece ao paciente a unidade onde o procedimento será realizado.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"codigo\": \"2080001\",\n  \"nome\": \"Hospital Municipal de Campinas\",\n  \"municipio\": \"Campinas\",\n  \"bairro\": \"Centro\",\n  \"endereco\": \"Av. Brasil, 1000\",\n  \"ddd\": \"19\",\n  \"telefone\": \"32001000\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "1.10 Paciente aceita o local",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/resposta",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "resposta"
+                  ]
+                },
+                "description": "LOCAL_DEFINIDO → CONFIRMADA.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"aceita\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "1.11 Registrar realização",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/realizacao",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "realizacao"
+                  ]
+                },
+                "description": "CONFIRMADA → CONCLUIDA. Fim do ciclo.\n\nO corpo é opcional: dataAtendimento informa quando o atendimento aconteceu e não pode ser futura. Sem ela, vale o momento do registro. A dataAtualizacao é sempre o momento do registro.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"dataAtendimento\": \"2026-09-28T14:30:00\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "2. Caminhos alternativos",
+          "description": "Cada requisição atua sobre {{solicitacaoId}}. Para testar um caminho, crie uma solicitação nova (1.1) e leve-a até o status indicado na descrição.",
+          "item": [
+            {
+              "name": "2.1 Devolver para complemento (PENDENTE)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/avaliacao",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "avaliacao"
+                  ]
+                },
+                "description": "EM_ANALISE → PENDENTE_DOCUMENTACAO. O motivo é obrigatório e vai no e-mail ao paciente.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"decisao\": \"PENDENTE\",\n  \"motivo\": \"Anexar ecocardiograma recente.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "2.2 Complementar documentação",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/complemento",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "complemento"
+                  ]
+                },
+                "description": "PENDENTE_DOCUMENTACAO → EM_ANALISE."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "2.3 Negar",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/avaliacao",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "avaliacao"
+                  ]
+                },
+                "description": "EM_ANALISE → NEGADA. O motivo é obrigatório.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"decisao\": \"NEGADA\",\n  \"motivo\": \"Procedimento não coberto por esta regulação.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "2.4 Paciente recusa o local",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/resposta",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "resposta"
+                  ]
+                },
+                "description": "LOCAL_DEFINIDO → EM_FILA. O local ofertado é removido e a solicitação volta para a fila.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"aceita\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "2.5 Cancelar",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/{{solicitacaoId}}/cancelamento",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "{{solicitacaoId}}",
+                    "cancelamento"
+                  ]
+                },
+                "description": "Permitido em qualquer status, exceto CONFIRMADA, CONCLUIDA ou CANCELADA."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "2.6 Criar solicitação de consulta",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/consultas/{{consultaId}}/solicitacoes",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "consultas",
+                    "{{consultaId}}",
+                    "solicitacoes"
+                  ]
+                },
+                "description": "CONSULTA e EXAME não usam modalidade.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"paciente\": {\n    \"nome\": \"Maria Clara Santos\",\n    \"cpf\": \"{{cpfPaciente}}\",\n    \"cns\": \"898000000000000\",\n    \"dataNascimento\": \"1985-03-12\",\n    \"telefone\": \"19987654321\",\n    \"email\": \"maria.santos@exemplo.com\",\n    \"endereco\": {\n      \"municipio\": \"Campinas\",\n      \"bairro\": \"Cambuí\"\n    }\n  },\n  \"medico\": {\n    \"nome\": \"Dr. João Pereira\",\n    \"crm\": \"123456-SP\",\n    \"especialidade\": \"Cardiologia\"\n  },\n  \"unidadeSolicitante\": {\n    \"codigo\": \"2079798\",\n    \"nome\": \"UBS Central\",\n    \"municipio\": \"Campinas\",\n    \"bairro\": \"Cambuí\"\n  },\n  \"tipoSolicitacao\": \"CONSULTA\",\n  \"procedimentos\": [\n    {\n      \"codigoProcedimento\": \"0301010072\",\n      \"descricaoProcedimento\": \"Consulta em cardiologia\"\n    }\n  ],\n  \"prioridade\": \"MEDIA\",\n  \"diagnostico\": \"Sopro cardíaco a esclarecer\",\n  \"observacoes\": \"Paciente com exames pré-operatórios em dia.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) { pm.collectionVariables.set(\"solicitacaoId\", pm.response.json().id); console.log(\"solicitacaoId =\", pm.response.json().id); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "2.7 Criar solicitação urgente",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/consultas/{{consultaId}}/solicitacoes",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "consultas",
+                    "{{consultaId}}",
+                    "solicitacoes"
+                  ]
+                },
+                "description": "Prioridade URGENTE exige motivoDaUrgencia.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"paciente\": {\n    \"nome\": \"Maria Clara Santos\",\n    \"cpf\": \"{{cpfPaciente}}\",\n    \"cns\": \"898000000000000\",\n    \"dataNascimento\": \"1985-03-12\",\n    \"telefone\": \"19987654321\",\n    \"email\": \"maria.santos@exemplo.com\",\n    \"endereco\": {\n      \"municipio\": \"Campinas\",\n      \"bairro\": \"Cambuí\"\n    }\n  },\n  \"medico\": {\n    \"nome\": \"Dr. João Pereira\",\n    \"crm\": \"123456-SP\",\n    \"especialidade\": \"Cardiologia\"\n  },\n  \"unidadeSolicitante\": {\n    \"codigo\": \"2079798\",\n    \"nome\": \"UBS Central\",\n    \"municipio\": \"Campinas\",\n    \"bairro\": \"Cambuí\"\n  },\n  \"tipoSolicitacao\": \"CIRURGIA\",\n  \"procedimentos\": [\n    {\n      \"descricaoProcedimento\": \"Revascularização do miocárdio\"\n    }\n  ],\n  \"modalidade\": \"INTERNACAO\",\n  \"prioridade\": \"URGENTE\",\n  \"motivoDaUrgencia\": \"Angina instável com risco de infarto.\",\n  \"diagnostico\": \"Doença arterial coronariana grave\",\n  \"observacoes\": \"Paciente com exames pré-operatórios em dia.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                      "if (pm.response.code === 201) { pm.collectionVariables.set(\"solicitacaoId\", pm.response.json().id); console.log(\"solicitacaoId =\", pm.response.json().id); }"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "3. Regras de negócio (erros esperados)",
+          "description": "Requisições que devem ser recusadas. Todas esperam status 400 ou 404.",
+          "item": [
+            {
+              "name": "3.1 Cirurgia sem modalidade",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/consultas/{{consultaId}}/solicitacoes",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "consultas",
+                    "{{consultaId}}",
+                    "solicitacoes"
+                  ]
+                },
+                "description": "Espera 400: a modalidade é obrigatória para CIRURGIA.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"paciente\": {\n    \"nome\": \"Maria Clara Santos\",\n    \"cpf\": \"{{cpfPaciente}}\",\n    \"cns\": \"898000000000000\",\n    \"dataNascimento\": \"1985-03-12\",\n    \"telefone\": \"19987654321\",\n    \"email\": \"maria.santos@exemplo.com\",\n    \"endereco\": {\n      \"municipio\": \"Campinas\",\n      \"bairro\": \"Cambuí\"\n    }\n  },\n  \"medico\": {\n    \"nome\": \"Dr. João Pereira\",\n    \"crm\": \"123456-SP\",\n    \"especialidade\": \"Cardiologia\"\n  },\n  \"unidadeSolicitante\": {\n    \"codigo\": \"2079798\",\n    \"nome\": \"UBS Central\",\n    \"municipio\": \"Campinas\",\n    \"bairro\": \"Cambuí\"\n  },\n  \"tipoSolicitacao\": \"CIRURGIA\",\n  \"procedimentos\": [\n    {\n      \"descricaoProcedimento\": \"Troca valvar aórtica\"\n    }\n  ],\n  \"prioridade\": \"ALTA\",\n  \"diagnostico\": \"Estenose aórtica grave\",\n  \"observacoes\": \"Paciente com exames pré-operatórios em dia.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "3.2 Consulta com modalidade",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/consultas/{{consultaId}}/solicitacoes",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "consultas",
+                    "{{consultaId}}",
+                    "solicitacoes"
+                  ]
+                },
+                "description": "Espera 400: a modalidade só se aplica a CIRURGIA.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"paciente\": {\n    \"nome\": \"Maria Clara Santos\",\n    \"cpf\": \"{{cpfPaciente}}\",\n    \"cns\": \"898000000000000\",\n    \"dataNascimento\": \"1985-03-12\",\n    \"telefone\": \"19987654321\",\n    \"email\": \"maria.santos@exemplo.com\",\n    \"endereco\": {\n      \"municipio\": \"Campinas\",\n      \"bairro\": \"Cambuí\"\n    }\n  },\n  \"medico\": {\n    \"nome\": \"Dr. João Pereira\",\n    \"crm\": \"123456-SP\",\n    \"especialidade\": \"Cardiologia\"\n  },\n  \"unidadeSolicitante\": {\n    \"codigo\": \"2079798\",\n    \"nome\": \"UBS Central\",\n    \"municipio\": \"Campinas\",\n    \"bairro\": \"Cambuí\"\n  },\n  \"tipoSolicitacao\": \"CONSULTA\",\n  \"procedimentos\": [\n    {\n      \"descricaoProcedimento\": \"Consulta em cardiologia\"\n    }\n  ],\n  \"modalidade\": \"AMBULATORIAL\",\n  \"prioridade\": \"MEDIA\",\n  \"diagnostico\": \"Sopro cardíaco\",\n  \"observacoes\": \"Paciente com exames pré-operatórios em dia.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "3.3 Urgente sem motivo",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/consultas/{{consultaId}}/solicitacoes",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "consultas",
+                    "{{consultaId}}",
+                    "solicitacoes"
+                  ]
+                },
+                "description": "Espera 400: motivoDaUrgencia é obrigatório para URGENTE.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"paciente\": {\n    \"nome\": \"Maria Clara Santos\",\n    \"cpf\": \"{{cpfPaciente}}\",\n    \"cns\": \"898000000000000\",\n    \"dataNascimento\": \"1985-03-12\",\n    \"telefone\": \"19987654321\",\n    \"email\": \"maria.santos@exemplo.com\",\n    \"endereco\": {\n      \"municipio\": \"Campinas\",\n      \"bairro\": \"Cambuí\"\n    }\n  },\n  \"medico\": {\n    \"nome\": \"Dr. João Pereira\",\n    \"crm\": \"123456-SP\",\n    \"especialidade\": \"Cardiologia\"\n  },\n  \"unidadeSolicitante\": {\n    \"codigo\": \"2079798\",\n    \"nome\": \"UBS Central\",\n    \"municipio\": \"Campinas\",\n    \"bairro\": \"Cambuí\"\n  },\n  \"tipoSolicitacao\": \"CIRURGIA\",\n  \"procedimentos\": [\n    {\n      \"descricaoProcedimento\": \"Troca valvar aórtica\"\n    }\n  ],\n  \"modalidade\": \"INTERNACAO\",\n  \"prioridade\": \"URGENTE\",\n  \"diagnostico\": \"Estenose aórtica grave\",\n  \"observacoes\": \"Paciente com exames pré-operatórios em dia.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "3.4 Fila de espera de cirurgia sem modalidade",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/fila-espera?tipo=CIRURGIA",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "fila-espera"
+                  ],
+                  "query": [
+                    {
+                      "key": "tipo",
+                      "value": "CIRURGIA"
+                    }
+                  ]
+                },
+                "description": "Espera 400: cada modalidade de cirurgia é uma fila própria."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "3.5 Solicitação inexistente",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrlSolicitacoes}}/solicitacoes/00000000-0000-0000-0000-000000000000",
+                  "host": [
+                    "{{baseUrlSolicitacoes}}"
+                  ],
+                  "path": [
+                    "solicitacoes",
+                    "00000000-0000-0000-0000-000000000000"
+                  ]
+                },
+                "description": "Espera 404."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ms-hist-solicitacoes (GraphQL)",
+      "description": "Consultas ao histórico de eventos. O serviço grava um registro para cada evento publicado pelo ms-gestao-solicitacoes. Também é possível testar pela interface http://localhost:8083/graphiql.",
+      "item": [
+        {
+          "name": "Linha do tempo de uma solicitação",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlHistorico}}/graphql",
+              "host": [
+                "{{baseUrlHistorico}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "Todos os eventos da solicitação, do mais antigo para o mais recente. Usa {{solicitacaoId}}.",
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query HistoricoDaSolicitacao($solicitacaoId: ID!) {\n  historicoDaSolicitacao(solicitacaoId: $solicitacaoId) {\n    tipoEvento\n    statusAtual\n    prioridadeAnterior\n    prioridadeNova\n    motivo\n    unidadeExecucaoNome\n    autor\n    dataEvento\n  }\n}",
+                "variables": "{\n  \"solicitacaoId\": \"{{solicitacaoId}}\"\n}"
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Sem erros GraphQL\", () => pm.expect(pm.response.json().errors).to.be.undefined);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Histórico do paciente (paginado)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrlHistorico}}/graphql",
+              "host": [
+                "{{baseUrlHistorico}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "description": "Eventos de todas as solicitações do paciente, do mais recente para o mais antigo. O CPF pode ter máscara ou não. size vai de 1 a 100.",
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query HistoricoDoPaciente($cpf: String!, $page: Int, $size: Int) {\n  historicoDoPaciente(cpf: $cpf, page: $page, size: $size) {\n    solicitacaoId\n    tipoEvento\n    statusAtual\n    prioridadeAnterior\n    prioridadeNova\n    motivo\n    unidadeExecucaoNome\n    autor\n    dataEvento\n  }\n}",
+                "variables": "{\n  \"cpf\": \"{{cpfPaciente}}\",\n  \"page\": 0,\n  \"size\": 10\n}"
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Sem erros GraphQL\", () => pm.expect(pm.response.json().errors).to.be.undefined);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrlSolicitacoes",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "baseUrlHistorico",
+      "value": "http://localhost:8083"
+    },
+    {
+      "key": "consultaId",
+      "value": "42"
+    },
+    {
+      "key": "cpfPaciente",
+      "value": "12345678901"
+    },
+    {
+      "key": "solicitacaoId",
+      "value": ""
+    }
+  ]
+}
