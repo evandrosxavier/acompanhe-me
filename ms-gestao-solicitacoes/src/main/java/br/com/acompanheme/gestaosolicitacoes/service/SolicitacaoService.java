@@ -5,6 +5,7 @@ import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.AvaliarSolicitacaoR
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.CriarSolicitacaoRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.DefinirLocalRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.PosicaoFilaResponse;
+import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.RegistrarRealizacaoRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.ResponderOfertaRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.SolicitacaoResponse;
 import br.com.acompanheme.gestaosolicitacoes.excecoes.BusinessException;
@@ -190,9 +191,9 @@ public class SolicitacaoService {
     }
 
     @Transactional
-    public SolicitacaoResponse registrarRealizacao(UUID id) {
+    public SolicitacaoResponse registrarRealizacao(UUID id, RegistrarRealizacaoRequest request) {
         Solicitacao solicitacao = buscarEntidade(id);
-        solicitacao.registrarRealizacao();
+        solicitacao.registrarRealizacao(request != null ? request.dataAtendimento() : null);
         return salvar(solicitacao, TipoEvento.SOLICITACAO_CONCLUIDA);
     }
 

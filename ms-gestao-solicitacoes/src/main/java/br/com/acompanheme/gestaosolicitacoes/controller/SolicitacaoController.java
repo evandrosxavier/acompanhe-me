@@ -6,6 +6,7 @@ import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.AvaliarSolicitacaoR
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.CriarSolicitacaoRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.DefinirLocalRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.PosicaoFilaResponse;
+import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.RegistrarRealizacaoRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.ResponderOfertaRequest;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.SolicitacaoCriadaResponse;
 import br.com.acompanheme.gestaosolicitacoes.dto.solicitacao.SolicitacaoResponse;
@@ -243,10 +244,12 @@ public class SolicitacaoController {
         return ResponseEntity.ok(solicitacaoService.cancelar(id));
     }
 
-    @Operation(summary = "Registrar realização", description = "Registra que o atendimento foi realizado, concluindo a solicitação. Válido a partir de CONFIRMADA.")
+    @Operation(summary = "Registrar realização", description = "Registra que o atendimento foi realizado, concluindo a solicitação. Válido a partir de CONFIRMADA. O corpo é opcional: sem dataAtendimento, vale o momento do registro.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Solicitação concluída",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = SolicitacaoResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Data do atendimento futura ou em formato inválido",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class))),
             @ApiResponse(responseCode = "404", description = "Solicitação não encontrada",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErroResponse.class))),
             @ApiResponse(responseCode = "409", description = "Transição inválida a partir do status atual",
@@ -255,7 +258,8 @@ public class SolicitacaoController {
                     content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     })
     @PostMapping("/solicitacoes/{id}/realizacao")
-    public ResponseEntity<SolicitacaoResponse> registrarRealizacao(@PathVariable UUID id) {
-        return ResponseEntity.ok(solicitacaoService.registrarRealizacao(id));
+    public ResponseEntity<SolicitacaoResponse> registrarRealizacao(@PathVariable UUID id,
+                                                                    @RequestBody(required = false) RegistrarRealizacaoRequest request) {
+        return ResponseEntity.ok(solicitacaoService.registrarRealizacao(id, request));
     }
 }

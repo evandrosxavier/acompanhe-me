@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import com.jayway.jsonpath.JsonPath;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -218,5 +219,54 @@ class SolicitacaoControllerTest {
     void cancelarInexistenteRetorna404() throws Exception {
         mockMvc.perform(post("/solicitacoes/{id}/cancelamento", UUID.randomUUID()))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void registraRealizacaoSemCorpoUsaMomentoAtual() throws Exception {
+        String id = criarEConfirmar();
+
+        mockMvc.perform(post("/solicitacoes/{id}/realizacao", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONCLUIDA"))
+                .andExpect(jsonPath("$.dataAtendimento").isNotEmpty());
+    }
+
+    @Test
+    void registraRealizacaoComDataInformada() throws Exception {
+        String id = criarEConfirmar();
+
+        mockMvc.perform(post("/solicitacoes/{id}/realizacao", id).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dataAtendimento\": \"2020-01-10T09:15:00\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONCLUIDA"))
+                .andExpect(jsonPath("$.dataAtendimento").value("2020-01-10T09:15:00"))
+                .andExpect(jsonPath("$.dataAtualizacao").value(org.hamcrest.Matchers.not("2020-01-10T09:15:00")));
+    }
+
+    @Test
+    void rejeitaRealizacaoComDataFutura() throws Exception {
+        String id = criarEConfirmar();
+        String amanha = LocalDateTime.now().plusDays(1).withNano(0).toString();
+
+        mockMvc.perform(post("/solicitacoes/{id}/realizacao", id).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dataAtendimento\": \"" + amanha + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("A data do atendimento não pode ser futura."));
+
+        mockMvc.perform(get("/solicitacoes/{id}", id))
+                .andExpect(jsonPath("$.status").value("CONFIRMADA"));
+    }
+
+    private String criarEConfirmar() throws Exception {
+        String id = criarERetornarId();
+        mockMvc.perform(post("/solicitacoes/{id}/analise", id)).andExpect(status().isOk());
+        mockMvc.perform(post("/solicitacoes/{id}/avaliacao", id).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"decisao\": \"APROVADA\"}")).andExpect(status().isOk());
+        mockMvc.perform(post("/solicitacoes/{id}/oferta", id).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"codigo\": \"2080001\", \"nome\": \"Hospital Municipal\", \"municipio\": \"Campinas\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/solicitacoes/{id}/resposta", id).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"aceita\": true}")).andExpect(status().isOk());
+        return id;
     }
 }

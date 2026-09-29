@@ -212,12 +212,17 @@ public class Solicitacao {
         dataAtualizacao = LocalDateTime.now();
     }
 
-    public void registrarRealizacao() {
+    public void registrarRealizacao(LocalDateTime dataAtendimento) {
         if (status != Status.CONFIRMADA) {
             throw TransicaoInvalidaException.para(status, "registrarRealizacao");
         }
+        LocalDateTime agora = LocalDateTime.now();
+        if (dataAtendimento != null && dataAtendimento.isAfter(agora)) {
+            throw new IllegalArgumentException("A data do atendimento não pode ser futura.");
+        }
         status = Status.CONCLUIDA;
-        dataAtendimento = LocalDateTime.now();
-        dataAtualizacao = LocalDateTime.now();
+        // dataAtendimento marca quando o atendimento aconteceu; dataAtualizacao, quando o sistema registrou a mudança.
+        this.dataAtendimento = dataAtendimento != null ? dataAtendimento : agora;
+        dataAtualizacao = agora;
     }
 }
