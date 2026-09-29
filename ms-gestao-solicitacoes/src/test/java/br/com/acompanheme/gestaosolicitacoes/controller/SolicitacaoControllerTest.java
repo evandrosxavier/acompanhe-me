@@ -91,6 +91,74 @@ class SolicitacaoControllerTest {
     }
 
     @Test
+    void rejeitaCirurgiaSemModalidade() throws Exception {
+        mockMvc.perform(post(URL_CRIACAO).contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY_VALIDO.replace("\"modalidade\": \"INTERNACAO\",", "")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Erro de Negócio"));
+    }
+
+    @Test
+    void rejeitaModalidadeEmSolicitacaoQueNaoECirurgia() throws Exception {
+        mockMvc.perform(post(URL_CRIACAO).contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY_VALIDO.replace("\"CIRURGIA\"", "\"CONSULTA\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Erro de Negócio"));
+    }
+
+    @Test
+    void aceitaConsultaSemModalidade() throws Exception {
+        mockMvc.perform(post(URL_CRIACAO).contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY_VALIDO.replace("\"CIRURGIA\"", "\"CONSULTA\"")
+                                .replace("\"modalidade\": \"INTERNACAO\",", "")))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void rejeitaUrgenteSemMotivoDaUrgencia() throws Exception {
+        mockMvc.perform(post(URL_CRIACAO).contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY_VALIDO.replace("\"ALTA\"", "\"URGENTE\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Erro de Negócio"));
+    }
+
+    @Test
+    void aceitaUrgenteComMotivoDaUrgencia() throws Exception {
+        mockMvc.perform(post(URL_CRIACAO).contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY_VALIDO.replace("\"ALTA\"", "\"URGENTE\", \"motivoDaUrgencia\": \"Risco de morte\"")))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void negarSemMotivoRetorna400() throws Exception {
+        String id = criarERetornarId();
+        mockMvc.perform(post("/solicitacoes/{id}/analise", id)).andExpect(status().isOk());
+
+        mockMvc.perform(post("/solicitacoes/{id}/avaliacao", id).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decisao\": \"NEGADA\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Motivo é obrigatório para negar a solicitação."));
+    }
+
+    @Test
+    void filaDeEsperaDeCirurgiaExigeModalidade() throws Exception {
+        mockMvc.perform(get("/solicitacoes/fila-espera").param("tipo", "CIRURGIA"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/solicitacoes/fila-espera").param("tipo", "CIRURGIA").param("modalidade", "INTERNACAO"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void filaDeEsperaDeConsultaNaoAceitaModalidade() throws Exception {
+        mockMvc.perform(get("/solicitacoes/fila-espera").param("tipo", "CONSULTA").param("modalidade", "AMBULATORIAL"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/solicitacoes/fila-espera").param("tipo", "CONSULTA"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void rejeitaCorpoInvalidoComErrosDeValidacao() throws Exception {
         String invalido = BODY_VALIDO.replace("\"cpf\": \"12345678901\"", "\"cpf\": \"123\"")
                 .replace("\"procedimentos\": [{\"descricaoProcedimento\": \"Troca valvar\"}, {\"codigoProcedimento\": \"0406\", \"descricaoProcedimento\": \"Ponte\"}],", "\"procedimentos\": [],");

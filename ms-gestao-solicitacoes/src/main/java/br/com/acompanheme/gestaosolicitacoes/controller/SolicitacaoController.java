@@ -87,7 +87,7 @@ public class SolicitacaoController {
     @GetMapping("/solicitacoes/fila-trabalho")
     public ResponseEntity<List<SolicitacaoResponse>> listarFilaDeTrabalho(
             @Parameter(description = "Tipo da solicitação", required = true) @RequestParam TipoSolicitacao tipo,
-            @Parameter(description = "Modalidade da solicitação (opcional)") @RequestParam(required = false) Modalidade modalidade) {
+            @Parameter(description = "Modalidade da solicitação (opcional; se omitida, lista todas as modalidades)") @RequestParam(required = false) Modalidade modalidade) {
         return ResponseEntity.ok(solicitacaoService.listarFilaDeTrabalho(tipo, modalidade));
     }
 
@@ -95,7 +95,7 @@ public class SolicitacaoController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "OK",
                     content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = SolicitacaoResponse.class)))),
-            @ApiResponse(responseCode = "400", description = "Parâmetro tipo ausente ou valor de enum inválido",
+            @ApiResponse(responseCode = "400", description = "Parâmetro tipo ausente, valor de enum inválido, modalidade ausente para CIRURGIA ou informada para CONSULTA/EXAME",
                     content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class))),
             @ApiResponse(responseCode = "500", description = "Internal Server Error",
                     content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
@@ -103,7 +103,7 @@ public class SolicitacaoController {
     @GetMapping("/solicitacoes/fila-espera")
     public ResponseEntity<List<SolicitacaoResponse>> listarFilaDeEspera(
             @Parameter(description = "Tipo da solicitação", required = true) @RequestParam TipoSolicitacao tipo,
-            @Parameter(description = "Modalidade da solicitação (opcional)") @RequestParam(required = false) Modalidade modalidade) {
+            @Parameter(description = "Modalidade: obrigatória quando o tipo é CIRURGIA (cada modalidade é uma fila) e não permitida para CONSULTA ou EXAME") @RequestParam(required = false) Modalidade modalidade) {
         return ResponseEntity.ok(solicitacaoService.listarFilaDeEspera(tipo, modalidade));
     }
 

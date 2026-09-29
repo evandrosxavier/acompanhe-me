@@ -48,6 +48,8 @@ public class SolicitacaoService {
         if (request.consultaId() != null && !request.consultaId().equals(consultaId)) {
             throw new BusinessException(ErrorCode.CONSULTA_ID_DIVERGENTE, HttpStatus.BAD_REQUEST);
         }
+        validarModalidade(request.tipoSolicitacao(), request.modalidade());
+        validarMotivoDaUrgencia(request.prioridade(), request.motivoDaUrgencia());
         Solicitacao solicitacao = SolicitacaoMapper.toEntity(request);
         solicitacao.setConsultaId(consultaId);
         solicitacao.setStatus(Status.REGISTRADA);
@@ -61,6 +63,21 @@ public class SolicitacaoService {
         return SolicitacaoMapper.toResponse(buscarEntidade(id));
     }
 
+    private void validarModalidade(TipoSolicitacao tipo, Modalidade modalidade) {
+        if (tipo == TipoSolicitacao.CIRURGIA && modalidade == null) {
+            throw new BusinessException(ErrorCode.MODALIDADE_OBRIGATORIA, HttpStatus.BAD_REQUEST);
+        }
+        if (tipo != TipoSolicitacao.CIRURGIA && modalidade != null) {
+            throw new BusinessException(ErrorCode.MODALIDADE_NAO_PERMITIDA, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private void validarMotivoDaUrgencia(Prioridade prioridade, String motivoDaUrgencia) {
+        if (prioridade == Prioridade.URGENTE && (motivoDaUrgencia == null || motivoDaUrgencia.isBlank())) {
+            throw new BusinessException(ErrorCode.MOTIVO_URGENCIA_OBRIGATORIO, HttpStatus.BAD_REQUEST);
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<SolicitacaoResponse> listarFilaDeTrabalho(TipoSolicitacao tipo, Modalidade modalidade) {
         return solicitacaoRepository.buscarFilaDeTrabalho(tipo, modalidade).stream()
@@ -70,6 +87,8 @@ public class SolicitacaoService {
 
     @Transactional(readOnly = true)
     public List<SolicitacaoResponse> listarFilaDeEspera(TipoSolicitacao tipo, Modalidade modalidade) {
+        // Cada modalidade de cirurgia é uma fila própria; por isso a modalidade segue a mesma regra da criação.
+        validarModalidade(tipo, modalidade);
         return solicitacaoRepository.buscarFilaDeEsperaPorTipoEModalidade(tipo, modalidade).stream()
                 .map(SolicitacaoMapper::toResponse)
                 .toList();
@@ -86,8 +105,8 @@ public class SolicitacaoService {
                 solicitacao.getModalidade(),
                 solicitacao.getPrioridade().rank(),
                 solicitacao.getDataEntradaFila());
-        long tamanhoTotalFila = solicitacaoRepository.buscarFilaDeEsperaPorTipoEModalidade(
-                solicitacao.getTipoSolicitacao(), solicitacao.getModalidade()).size();
+        long tamanhoTotalFila = solicitacaoRepository.contarNaFila(
+                solicitacao.getTipoSolicitacao(), solicitacao.getModalidade());
         return new PosicaoFilaResponse(solicitacao.getId(), naFrente + 1, tamanhoTotalFila);
     }
 

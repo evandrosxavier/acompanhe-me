@@ -18,7 +18,7 @@ public interface SolicitacaoRepository extends JpaRepository<Solicitacao, UUID> 
             SELECT s FROM Solicitacao s
             WHERE s.status = br.com.acompanheme.gestaosolicitacoes.model.enums.Status.REGISTRADA
               AND s.tipoSolicitacao = :tipoSolicitacao
-              AND (:modalidade IS NULL AND s.modalidade IS NULL OR s.modalidade = :modalidade)
+              AND (:modalidade IS NULL OR s.modalidade = :modalidade)
             ORDER BY
                 CASE s.prioridade
                     WHEN br.com.acompanheme.gestaosolicitacoes.model.enums.Prioridade.URGENTE THEN 0
@@ -57,6 +57,14 @@ public interface SolicitacaoRepository extends JpaRepository<Solicitacao, UUID> 
         """)
     long contarNaFrente(TipoSolicitacao tipoSolicitacao, Modalidade modalidade,
                      int rankPrioridade, LocalDateTime dataEntradaFilaReferencia);
+
+    @Query("""
+            SELECT COUNT(s) FROM Solicitacao s
+            WHERE s.status = br.com.acompanheme.gestaosolicitacoes.model.enums.Status.EM_FILA
+              AND s.tipoSolicitacao = :tipoSolicitacao
+              AND (:modalidade IS NULL AND s.modalidade IS NULL OR s.modalidade = :modalidade)
+            """)
+    long contarNaFila(TipoSolicitacao tipoSolicitacao, Modalidade modalidade);
 
     @Query("""
             SELECT s FROM Solicitacao s

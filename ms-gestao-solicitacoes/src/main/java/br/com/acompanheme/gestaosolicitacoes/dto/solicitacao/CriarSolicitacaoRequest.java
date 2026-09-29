@@ -41,14 +41,14 @@ public record CriarSolicitacaoRequest(
         @Valid
         List<@NotNull(message = "Procedimento não pode ser nulo") ProcedimentoDTO> procedimentos,
 
-        @Schema(description = "Modalidade (aplica-se apenas quando o tipo é CIRURGIA)", example = "AMBULATORIAL", nullable = true)
+        @Schema(description = "Modalidade: obrigatória quando o tipo é CIRURGIA e não permitida para CONSULTA ou EXAME", example = "AMBULATORIAL", nullable = true)
         Modalidade modalidade,
 
         @Schema(description = "Prioridade", example = "ALTA")
         @NotNull(message = "Prioridade é obrigatória")
         Prioridade prioridade,
 
-        @Schema(description = "Motivo da urgência", nullable = true)
+        @Schema(description = "Motivo da urgência; obrigatório quando a prioridade for URGENTE", nullable = true)
         String motivoDaUrgencia,
 
         @Schema(description = "Diagnóstico", example = "Estenose aórtica")
