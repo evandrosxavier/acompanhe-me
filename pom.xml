@@ -20,9 +20,6 @@
     <description>Projeto raiz - Acompanhe-me Microservices</description>
 
     <modules>
-        <module>ms-config-server</module>
-        <module>ms-gateway-service</module>
-        <module>ms-discovery-service</module>        
         <module>ms-gestao-consultas</module>
         <module>ms-gestao-solicitacoes</module>
         <module>ms-hist-solicitacoes</module>
